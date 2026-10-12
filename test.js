@@ -94,3 +94,9 @@ test('logo is served without login', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('content-type'), 'image/svg+xml');
 });
+
+test('session cookie is Secure only behind an https proxy', async () => {
+  const login = (headers) => fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ username: 'admin', password: 'adminpw' }) });
+  assert.doesNotMatch((await login({})).headers.get('set-cookie'), /Secure/);
+  assert.match((await login({ 'x-forwarded-proto': 'https' })).headers.get('set-cookie'), /; Secure/);
+});

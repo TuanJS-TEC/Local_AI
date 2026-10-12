@@ -79,6 +79,9 @@ async function readJson(req, max = 64 * 1024) {
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
+// Behind a TLS-terminating proxy (Cloudflare Tunnel) the request arrives as plain http; the proxy says so in this header.
+const secureFlag = (req) => (req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '');
+
 const sidOf = (req) => /(?:^|;\s*)sid=([a-f0-9]+)/.exec(req.headers.cookie || '')?.[1];
 
 function currentUser(req) {
@@ -126,7 +129,7 @@ async function route(req, res, send) {
     const token = randomBytes(32).toString('hex');
     db.prepare('DELETE FROM sessions WHERE expires <= ?').run(Date.now());
     db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(token, u.id, Date.now() + SESSION_MS);
-    res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}`);
+    res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secureFlag(req)}`);
     return send(200, { id: u.id, username: u.username, role: u.role });
   }
 
@@ -135,7 +138,7 @@ async function route(req, res, send) {
 
   if (m === 'POST' && pathname === '/api/logout') {
     db.prepare('DELETE FROM sessions WHERE token = ?').run(sidOf(req));
-    res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+    res.setHeader('Set-Cookie', `sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureFlag(req)}`);
     return send(200, { ok: true });
   }
   if (m === 'GET' && pathname === '/api/me') return send(200, user);
